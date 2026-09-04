@@ -9,21 +9,36 @@
 // 两版都要 PASS。评测结果会包含两版的耗时和比值。
 #include "common.h"
 
+__constant__ float COEF[8];
+
 __global__ void poly_eval_global(const float *x, float *y, const float *coef,
-                                 int n) {
+                                 int n)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) {
+    if (i < n)
+    {
         float xi = x[i];
         float acc = 0.f;
         // 秦九韶（Horner）算法，从最高次往下算。
-        for (int k = 7; k >= 0; k--) acc = acc * xi + coef[k];
+        for (int k = 7; k >= 0; k--)
+            acc = acc * xi + coef[k];
         y[i] = acc;
     }
 }
 
 __global__ void poly_eval_const(const float *x, float *y, const float *coef,
-                                int n) {
+                                int n)
+{
     // TODO：从这里开始写（读 __constant__ COEF 的版本）
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        float xi = x[i];
+        float acc = 0.f;
+        for (int k = 7; k >= 0; k--)
+            acc = acc * xi + COEF[k];
+        y[i] = acc;
+    }
 }
 
 // ---------------- 以下是判测与计时，不要修改 ----------------
@@ -32,13 +47,15 @@ typedef void (*poly_fn)(const float *, float *, const float *, int);
 
 static float run_one(poly_fn fn, const char *name, const float *d_x, float *d_y,
                      const float *d_coef, float *h_y, const float *h_ref, int n,
-                     int blocks, int threads) {
+                     int blocks, int threads)
+{
     CUDA_CHECK(cudaMemset(d_y, 0, (size_t)n * sizeof(float)));
     fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
     CUDA_CHECK_KERNEL();
     CUDA_CHECK(cudaMemcpy(h_y, d_y, (size_t)n * sizeof(float),
                           cudaMemcpyDeviceToHost));
-    if (!check_close(h_y, h_ref, n, 1e-3f)) {
+    if (!check_close(h_y, h_ref, n, 1e-3f))
+    {
         printf("%s: FAIL\n", name);
         emit_result("4.3", "fail", "{}");
         exit(1);
@@ -47,14 +64,16 @@ static float run_one(poly_fn fn, const char *name, const float *d_x, float *d_y,
     const int reps = 100;
     GpuTimer timer;
     timer.start();
-    for (int r = 0; r < reps; r++) fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
+    for (int r = 0; r < reps; r++)
+        fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
     float ms = timer.stop_ms() / reps;
     CUDA_CHECK_KERNEL();
-    printf("%s: PASS  平均 %.4f ms\n", name, ms);
+    printf("%s: PASS  average %.4f ms\n", name, ms);
     return ms;
 }
 
-int main() {
+int main()
+{
     const int n = 1 << 24;
     size_t bytes = (size_t)n * sizeof(float);
     float h_coef[8] = {1.f, -0.5f, 0.25f, -0.125f, 0.0625f, -0.03125f, 0.015625f, -0.0078125f};
@@ -63,10 +82,13 @@ int main() {
     float *h_y = (float *)malloc(bytes);
     float *h_ref = (float *)malloc(bytes);
     fill_random(h_x, n, 5);
-    for (int i = 0; i < n; i++) h_x[i] = h_x[i] * 0.1f;  // 压到 [0,1) 附近防溢出
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+        h_x[i] = h_x[i] * 0.1f; // 压到 [0,1) 附近防溢出
+    for (int i = 0; i < n; i++)
+    {
         float acc = 0.f;
-        for (int k = 7; k >= 0; k--) acc = acc * h_x[i] + h_coef[k];
+        for (int k = 7; k >= 0; k--)
+            acc = acc * h_x[i] + h_coef[k];
         h_ref[i] = acc;
     }
 
@@ -78,6 +100,17 @@ int main() {
     CUDA_CHECK(cudaMemcpy(d_coef, h_coef, sizeof(h_coef), cudaMemcpyHostToDevice));
 
     // TODO：把 h_coef 拷进你声明的 __constant__ 数组（cudaMemcpyToSymbol）。
+
+    CUDA_CHECK(cudaMemcpyToSymbol(COEF, h_coef, sizeof(h_coef))); // GPU thread 只读，CPU 通过cudaMencpyToSymbol写入  每个 SM 上有一块专用的常量缓存（constant cache）。warp 里的 32 个线程如果都读同一个地址，硬件一次广播喂给所有线程。但如果 32 个线程读 32 个不同地址，就只能串行排队——那还不如用 global memory
+    /*constant cache 和 L1 cache 的区别：
+
+    L1/L2 cache：按 cache line（128B）粒度读
+  → 一次请求拉回 128B，相邻地址的数据一起进来
+  → warp 里 32 个线程读 32 个不同地址，如果落在同一条 cache line，一次就够
+
+    constant cache：按 单地址 粒度读
+  → 它只有 一个读端口，每个 cycle 只能服务一个地址
+  → warp 里 32 个线程读 32 个不同地址 → 排队串行，32 cycles*/
 
     int threads = 256;
     int blocks = (n + threads - 1) / threads;

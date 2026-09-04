@@ -4,30 +4,43 @@
 #include "common.h"
 
 // 按奇偶分支：同一个 warp 里两种线程各占一半。
-__global__ void diverge_in_warp(float *out, int iters) {
+__global__ void diverge_in_warp(float *out, int iters)
+{
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float x = tid * 0.5f;
-    if (tid % 2 == 0) {
-        for (int i = 0; i < iters; i++) x = x * 1.000001f + 0.5f;
-    } else {
-        for (int i = 0; i < iters; i++) x = x * 0.999999f - 0.5f;
+    if (tid % 2 == 0)
+    {
+        for (int i = 0; i < iters; i++)
+            x = x * 1.000001f + 0.5f;
+    }
+    else
+    {
+        for (int i = 0; i < iters; i++)
+            x = x * 0.999999f - 0.5f;
     }
     out[tid] = x;
 }
 
 // 按 warp 分支：一个 warp 内所有线程走同一条路。
-__global__ void diverge_by_warp(float *out, int iters) {
+__global__ void diverge_by_warp(float *out, int iters)
+{
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float x = tid * 0.5f;
-    if ((tid / 32) % 2 == 0) {
-        for (int i = 0; i < iters; i++) x = x * 1.000001f + 0.5f;
-    } else {
-        for (int i = 0; i < iters; i++) x = x * 0.999999f - 0.5f;
+    if ((tid / 32) % 2 == 0)
+    {
+        for (int i = 0; i < iters; i++)
+            x = x * 1.000001f + 0.5f;
+    }
+    else
+    {
+        for (int i = 0; i < iters; i++)
+            x = x * 0.999999f - 0.5f;
     }
     out[tid] = x;
 }
 
-int main() {
+int main()
+{
     const int blocks = 1024, threads = 256, iters = 20000;
     const int n = blocks * threads;
     float *d_out;
@@ -49,8 +62,8 @@ int main() {
     float ms_by = timer.stop_ms();
 
     CUDA_CHECK_KERNEL();
-    printf("warp 内分支 (tid %% 2)    : %8.3f ms\n", ms_in);
-    printf("按 warp 分支 (tid/32 %% 2): %8.3f ms\n", ms_by);
-    printf("比值: %.2f\n", ms_in / ms_by);
+    printf("warp in(tid %% 2)    : %8.3f ms\n", ms_in);
+    printf("by warp (tid/32 %% 2): %8.3f ms\n", ms_by);
+    printf("ratio: %.2f\n", ms_in / ms_by);
     return 0;
 }

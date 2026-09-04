@@ -4,19 +4,22 @@
 #include <chrono>
 #include "common.h"
 
-__global__ void busy(float *out, int iters) {
+__global__ void busy(float *out, int iters)
+{
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     float x = tid * 0.5f;
-    for (int i = 0; i < iters; i++) x = x * 1.000001f + 0.5f;
+    for (int i = 0; i < iters; i++)
+        x = x * 1.000001f + 0.5f;
     out[tid] = x;
 }
 
-int main() {
+int main()
+{
     const int blocks = 2048, threads = 256, iters = 5000;
     float *d_out;
     CUDA_CHECK(cudaMalloc(&d_out, (size_t)blocks * threads * sizeof(float)));
 
-    busy<<<blocks, threads>>>(d_out, iters);  // 热身
+    busy<<<blocks, threads>>>(d_out, iters); // 热身
     CUDA_CHECK_KERNEL();
 
     // 方式一：host 计时，启动后立刻停表。
@@ -40,8 +43,8 @@ int main() {
     busy<<<blocks, threads>>>(d_out, iters);
     float ms_event = timer.stop_ms();
 
-    printf("host 计时、不等 GPU : %10.4f ms\n", ms_nosync);
-    printf("host 计时、等 GPU   : %10.4f ms\n", ms_sync);
-    printf("cudaEvent 计时      : %10.4f ms\n", ms_event);
+    printf("host count、do not wait GPU : %10.4f ms\n", ms_nosync);
+    printf("host count、wait GPU   : %10.4f ms\n", ms_sync);
+    printf("cudaEvent count      : %10.4f ms\n", ms_event);
     return 0;
 }

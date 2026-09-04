@@ -24,5 +24,56 @@ import tilelang
 import tilelang.language as T
 
 
+
+def make_softmax(M, N, dtype="float32"):
+    @T.prim_func
+    def softmax_kernel(
+        X: T.Buffer((M, N), dtype), # type: ignore
+        Y: T.Buffer((M, N), dtype), # type: ignore
+    ):
+        frag_width = 1 << (N - 1).bit_length()
+        grid_dim = T.ceildiv(M, 1)
+
+        with T.Kernel(grid_dim, threads=128) as (bx):
+            
+            a_shared = T.alloc_shared((frag_width,), dtype)
+            b_shared = T.alloc_shared((frag_width,), dtype)
+            c_local = T.alloc_fragment((frag_width,), dtype)
+
+            max_val = T.alloc_fragment((1,), dtype)
+            sum_val = T.alloc_fragment((1,), dtype)
+
+            T.copy(X[bx, 0:N], a_shared[0:N])
+
+            if frag_width > N:
+                for i in T.Parallel(frag_width - N):
+                    a_shared[N + i] = -T.infinity(dtype)
+
+            T.reduce_max(a_shared, out=max_val)
+
+            for i in T.Parallel(frag_width):
+                b_shared[i] = T.if_then_else(
+                    i < N,
+                    T.exp(a_shared[i] - max_val[0]),
+                    0.0,
+                )
+
+            T.reduce_sum(b_shared, out=sum_val)
+
+            for i in T.Parallel(frag_width):
+                c_local[i] = T.if_then_else(
+                    i < N,
+                    b_shared[i] / sum_val[0],
+                    T.infinity(dtype),
+                )
+
+            T.copy(c_local[0:N], Y[bx, 0:N])
+
+    return softmax_kernel
+
+
 def softmax(x: torch.Tensor) -> torch.Tensor:
-    raise NotImplementedError("从这里开始写")
+    M, N = x.shape
+    kernel = tilelang.compile(make_softmax(M, N), out_idx=[1])
+    y = kernel(x)
+    return y

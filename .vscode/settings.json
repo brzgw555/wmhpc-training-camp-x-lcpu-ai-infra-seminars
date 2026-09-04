@@ -1,0 +1,32 @@
+{
+    // ============================================================
+    // CUDA 文件：关掉 C/C++ 和 Nsight 的诊断红线。
+    // IntelliSense 引擎照常运行——跳转定义、自动补全都正常。
+    // 真正的编译错误在 Ctrl+Shift+B 时由 nvcc 报出。
+    // ============================================================
+    //"C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.intelliSenseEngine": "default",
+    // Nsight 自己的诊断也关掉
+    "nsight.intelliSense.enableDiagnostics": false,
+    // 集成终端：自动加载 VS 2022 Developer 环境
+    "terminal.integrated.profiles.windows": {
+        "VS 2022 Developer PowerShell": {
+            "path": "powershell.exe",
+            "args": [
+                "-NoExit",
+                "-Command",
+                "& 'D:\\Visual Studio\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1' -SkipAutomaticLocation"
+            ]
+        },
+        "VS 2022 Developer CMD": {
+            "path": "cmd.exe",
+            "args": [
+                "/k",
+                "D:\\Visual Studio\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"
+            ]
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "VS 2022 Developer PowerShell",
+    "C_Cpp.intelliSenseCacheSize": 0,
+    "C_Cpp.errorSquiggles": "disabled"
+}

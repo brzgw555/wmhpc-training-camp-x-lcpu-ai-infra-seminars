@@ -1,69 +1,71 @@
-// 问题 2.3：把显式内存管理改成 Unified Memory（ MODIFY ）。
-// 下面是一份完整可运行的显式管理版本。任务：
-//   0. 先按原样跑一次，记下耗时——这一版会被你的改动覆盖掉，
-//      第 4 步的对比要拿它做基准；
-//   1. 用 cudaMallocManaged 替换 cudaMalloc + malloc；
-//   2. 删掉所有 cudaMemcpy，kernel 直接读写同一组指针，CPU 也直接读；
-//   3. 想清楚哪里需要 cudaDeviceSynchronize；
-//   4. 对比两版的耗时。两版的计时窗口要保持一致：分配和填数据都在窗口
-//      外，窗口从"数据已经在内存里备好"开始，到 CPU 把结果全部读完为止
-//      （下面用一个累加校验和的循环代表"CPU 读完全部结果"，别把它删了）。
-// 改完仍要 PASS。
+// Question 2.3: Convert explicit memory management to Unified Memory (MODIFY).
+// Below is a fully runnable version with explicit memory management. Tasks:
+//   0. Run it as-is once and record the execution time. This version will be overwritten by your modifications,
+//      and it will serve as the benchmark for comparison in Step 4;
+//   1. Replace cudaMalloc plus malloc with cudaMallocManaged;
+//   2. Remove all cudaMemcpy calls. The kernel directly reads and writes the same set of pointers, and the CPU also performs direct reads;
+//   3. Determine the positions where cudaDeviceSynchronize is required;
+//   4. Compare the execution time of the two versions. The timing windows of both versions must be consistent: memory allocation and data filling are outside the timing window.
+//      The window starts when "data is ready in memory" and ends when the CPU finishes reading all results
+//      (the loop calculating an accumulated checksum below stands for "the CPU finishes reading all results"; do not delete this loop).
+// The revised code must still PASS all tests.
 #include <chrono>
 #include "common.h"
 
-__global__ void vectorAdd(const float *a, const float *b, float *c, int n) {
+__global__ void vectorAdd(const float *a, const float *b, float *c, int n)
+{
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) c[idx] = a[idx] + b[idx];
+    if (idx < n)
+        c[idx] = a[idx] + b[idx];
 }
 
-int main() {
-    const int n = 1 << 24;  // 16M 元素
+int main()
+{
+    const int n = 1 << 24; // 16M
     size_t bytes = (size_t)n * sizeof(float);
 
-    // 先把 CUDA context 建起来。首次调用 CUDA API 要花几百毫秒初始化，
-    // 放进计时窗口会把要观察的差距完全淹掉。
+    // First establish the CUDA context. The initial call to the CUDA API requires hundreds of milliseconds for initialization,
+    // which would completely obscure the differences to be observed if included in the timing window.
     CUDA_CHECK(cudaFree(0));
 
-    float *h_a = (float *)malloc(bytes);
-    float *h_b = (float *)malloc(bytes);
-    float *h_c = (float *)malloc(bytes);
-    fill_random(h_a, n, 1);
-    fill_random(h_b, n, 2);
-
-    // 期望的校验和，host 上先算好，同样不计入计时。
-    double want = 0;
-    for (int i = 0; i < n; i++) want += (double)(h_a[i] + h_b[i]);
+    // Expected checksum, precomputed on the host and likewise excluded from timing.
 
     float *d_a, *d_b, *d_c;
-    CUDA_CHECK(cudaMalloc(&d_a, bytes));
-    CUDA_CHECK(cudaMalloc(&d_b, bytes));
-    CUDA_CHECK(cudaMalloc(&d_c, bytes));
+    CUDA_CHECK(cudaMallocManaged(&d_a, bytes));
+    CUDA_CHECK(cudaMallocManaged(&d_b, bytes));
+    CUDA_CHECK(cudaMallocManaged(&d_c, bytes));
+    fill_random(d_a, n, 1);
+    fill_random(d_b, n, 2);
+    double want = 0;
+    for (int i = 0; i < n; i++)
+        want += (double)(d_a[i] + d_b[i]);
 
     int threads = 256;
     int blocks = (n + threads - 1) / threads;
 
-    // ================= 计时窗口开始 =================
+    // =================time window start=================
     auto t0 = std::chrono::steady_clock::now();
 
-    CUDA_CHECK(cudaMemcpy(d_a, h_a, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_b, h_b, bytes, cudaMemcpyHostToDevice));
+    // No cudaMemcpy calls needed with Unified Memory
 
     vectorAdd<<<blocks, threads>>>(d_a, d_b, d_c, n);
     CUDA_CHECK_KERNEL();
 
-    CUDA_CHECK(cudaMemcpy(h_c, d_c, bytes, cudaMemcpyDeviceToHost));
+    // No cudaMemcpy calls needed with Unified Memory
 
-    // CPU 读完全部结果。unified memory 版里，这一步才会把结果页搬回 host。
+    // CPU read the results. In the unified memory version, this step will trigger the migration of the result pages back to the host.
     double got = 0;
-    for (int i = 0; i < n; i++) got += (double)h_c[i];
+    for (int i = 0; i < n; i++)
+        got += (double)d_c[i];
 
     auto t1 = std::chrono::steady_clock::now();
-    // ================= 计时窗口结束 =================
+    // =================time window end=================
 
-    printf("搬运 + kernel + 读回: %.1f ms\n",
+    printf("unified mem: %.1f ms\n",
            std::chrono::duration<double, std::milli>(t1 - t0).count());
 
     REPORT(fabs(got - want) <= 1e-3 * (1.0 + fabs(want)));
     return 0;
 }
+// cudaMemcpy:43.9 ms
+// cudaMallocManaged: 484ms

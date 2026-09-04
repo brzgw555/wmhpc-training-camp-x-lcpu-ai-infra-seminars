@@ -1,0 +1,34 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "nvcc: build current .cu file",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "${workspaceFolder}\\scripts\\nvccl.bat -O2 -std=c++17 -I${workspaceFolder}\\assignment01\\cuda -arch=native -o \"${fileDirname}\\bin\\${fileBasenameNoExtension}.exe\" \"${file}\""
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "编译当前 .cu 文件 → 输出到同目录 bin/ 下"
+        },
+        {
+            "label": "nvcc: build & run current .cu file",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "${workspaceFolder}\\scripts\\nvccl.bat -O2 -std=c++17 -I${workspaceFolder}\\assignment01\\cuda -arch=native -o \"${fileDirname}\\bin\\${fileBasenameNoExtension}.exe\" \"${file}\" && \"${fileDirname}\\bin\\${fileBasenameNoExtension}.exe\""
+            ],
+            "group": {
+                "kind": "test"
+            },
+            "problemMatcher": [],
+            "detail": "编译当前 .cu 文件并运行"
+        }
+    ]
+}

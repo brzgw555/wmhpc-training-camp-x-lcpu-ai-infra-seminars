@@ -12,25 +12,28 @@
 
 #define BLOCK 256
 
-__global__ void stream_add(const float *a, const float *b, float *c, int n) {
-    extern __shared__ float ballast[];  // 只占 shared memory，不使用
+__global__ void stream_add(const float *a, const float *b, float *c, int n)
+{
+    extern __shared__ float ballast[]; // 只占 shared memory，不使用
     (void)ballast;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) c[i] = a[i] + b[i];
+    if (i < n)
+        c[i] = a[i] + b[i];
 }
 
-int main() {
+int main()
+{
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     int smem_sm = (int)prop.sharedMemPerMultiprocessor;
     int smem_blk_max = (int)prop.sharedMemPerBlockOptin;
     int max_threads = prop.maxThreadsPerMultiProcessor;
-    printf("%s：shared memory %d KB / SM，最大常驻 %d 线程 / SM\n\n",
+    printf("%s:shared memory %d KB / SM,max %d threads / SM\n\n",
            prop.name, smem_sm / 1024, max_threads);
 
     // 允许单个 block 申请超过默认上限（48 KB）的动态 shared memory
     CUDA_CHECK(cudaFuncSetAttribute((const void *)stream_add,
-        cudaFuncAttributeMaxDynamicSharedMemorySize, smem_blk_max));
+                                    cudaFuncAttributeMaxDynamicSharedMemorySize, smem_blk_max));
 
     const int n = 1 << 26;
     size_t bytes = (size_t)n * sizeof(float);
@@ -48,17 +51,19 @@ int main() {
     // 额外保留一小块 shared），一切以 API 报出来的数为准。
     const double fracs[] = {0.0, 0.132, 0.15, 0.18, 0.29, 0.55};
     printf("%-14s %-16s %-11s %s\n",
-           "shared/block", "理论 block/SM", "occupancy", "实测带宽");
-    for (int k = 0; k < 6; k++) {
+           "shared/block", "expected block/SM", "occupancy", "actual bandwidth");
+    for (int k = 0; k < 6; k++)
+    {
         int smem = (int)(smem_sm * fracs[k]);
-        if (smem > smem_blk_max) smem = smem_blk_max;
+        if (smem > smem_blk_max)
+            smem = smem_blk_max;
 
         int active = 0;
         CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
             &active, stream_add, BLOCK, smem));
         double occ = 100.0 * active * BLOCK / max_threads;
 
-        stream_add<<<nblocks, BLOCK, smem>>>(d_a, d_b, d_c, n);  // 热身
+        stream_add<<<nblocks, BLOCK, smem>>>(d_a, d_b, d_c, n); // 热身
         CUDA_CHECK_KERNEL();
         const int reps = 20;
         GpuTimer timer;
@@ -77,7 +82,7 @@ int main() {
     int min_grid = 0, best_block = 0;
     CUDA_CHECK(cudaOccupancyMaxPotentialBlockSize(
         &min_grid, &best_block, stream_add, 0, 0));
-    printf("\ncudaOccupancyMaxPotentialBlockSize 建议（smem = 0 时）：blockSize = %d\n",
+    printf("\ncudaOccupancyMaxPotentialBlockSize suggested(smem = 0):blockSize = %d\n",
            best_block);
 
     CUDA_CHECK(cudaFree(d_a));

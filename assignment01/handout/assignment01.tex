@@ -188,9 +188,9 @@ Session 1 讲座里提过“N 方过百万”这个例子。总计算量 $10^{12
 执行层次 & 软件含义 & 对应硬件 & 直接可用的存储 & 同步与通信手段 \\
 \midrule
 thread & kernel 的最小执行单位 & 计算单元上的一个 lane & 自己的寄存器 & （自身天然有序） \\
-warp &  &  &  &  \\
-block / CTA &  &  &  &  \\
-grid &  &  &  &  \\
+warp & 32个thread一组的SIMT执行单元 & warp scheduler+32 lane  & 32 lane的register, shared memory  & __syncwarp() 同步;warp shuffle 指令交换寄存器数据  \\
+block / CTA & SM调度的单元，一个线程组 & SM上的线程块  & shared memory  &  __syncthreads();注意原子操作\\
+grid & 线程网络&  整个GPU，所有SM &  global, constant &  cudaDeviceSynchronize(),block级同步;注意原子操作\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -418,11 +418,11 @@ Guide 2.3.3--2.3.5、2.3.7、1.2.3。
 空间 & 谁可见 & 生命周期 & 片上 / 片外 & 谁管理 \\
 \midrule
 register & 单个线程 & 线程 & 片上 & 编译器 \\
-local &  &  &  &  \\
-shared &  &  &  &  \\
-global &  &  &  &  \\
-constant &  &  &  &  \\
-L1 / L2 cache &  &  &  &  \\
+local &  thread & thread & 片外  & 编译器  \\
+shared &  block & block  & 片上 & 用户  \\
+global &  所有thread host不可直接访问常规device内存,unified memory则可以& 程序  & 片外 & 用户 \\
+constant & 所有thread & 程序  & 片外 & 用户 \\
+L1 / L2 cache & 所有 & 硬件管理 & 片上 & 硬件管理 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -542,9 +542,9 @@ make run/m5_async/01_timing_trap
 \prob{5.2}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item 同一个 stream 里的操作按提交顺序执行。
-  \item kernel 启动后，host 代码立刻继续往下执行。
-  \item unified memory 下，CPU 访问一页正被 GPU 占用的内存，会触发缺页与页迁移。
+  \item 同一个 stream 里的操作按提交顺序执行。  --正确
+  \item kernel 启动后，host 代码立刻继续往下执行。 --正确
+  \item unified memory 下，CPU 访问一页正被 GPU 占用的内存，会触发缺页与页迁移。  --正确 如果频繁迁移性能暴跌
 \end{enumerate}
 
 \begin{lookback}
@@ -565,9 +565,9 @@ Guide 1.2.2.3（必读，篇幅不长）、2.4.1--2.4.6（浏览）、2.2（知�
 \prob{6.1}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item tile 是显存里的一块可变区域，kernel 通过指针直接改写它。
-  \item 对 tile 的一次运算（如两个 tile 相加）由编译器映射到 block 内的多个线程上执行。
-  \item tile 模型与 SIMT 模型互斥，一个 CUDA 程序只能选一种。
+  \item tile 是显存里的一块可变区域，kernel 通过指针直接改写它。  --错误。 对tile的操作基于一个新的tile而不是直接修改
+  \item 对 tile 的一次运算（如两个 tile 相加）由编译器映射到 block 内的多个线程上执行。  --正确
+  \item tile 模型与 SIMT 模型互斥，一个 CUDA 程序只能选一种。  --错误
 \end{enumerate}
 
 \prob{6.2}{CONCEPT}
@@ -595,10 +595,10 @@ def vec_add(a, b, c, TILE: ct.Constant[int]):
 \toprule
  & CUDA SIMT & cuTile & Triton \\
 \midrule
-并行单位 & block 里的 thread & block & \\
-编号 & \texttt{blockIdx} / \texttt{threadIdx} &  & \\
-数据分工 & 线程用全局下标来划分数据 &  & \\
-边界处理 & \texttt{if} 判断 &  & \\
+并行单位 & block 里的 thread & block & block\\
+编号 & \texttt{blockIdx} / \texttt{threadIdx} & ct.bid() & tl.program_id()\\
+数据分工 & 线程用全局下标来划分数据 & .tiled_view()划分tile & offset偏移\\
+边界处理 & \texttt{if} 判断 & 自动处理 & mask\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -669,10 +669,10 @@ uv run pytest tests/test_tilelang.py -k copy2d
 \toprule
 谁负责 & CUDA SIMT & cuTile & Triton & TileLang \\
 \midrule
-线程到数据的映射 & 用户 & & & \\
-边界处理 & 用户 & & & \\
-tile / block 尺寸的选择 & 用户 & & & \\
-block 内同步 & 用户 & & & \\
+线程到数据的映射 & 用户 & 编译器 & 编译器 & 用户 \\
+边界处理 & 用户 & 编译器 & 用户 & 编译器\\
+tile / block 尺寸的选择 & 用户 & 用户 & 用户 & 用户\\
+block 内同步 & 用户 & 编译器 & 编译器 & 编译器 \\
 \bottomrule
 \end{tabular}
 \end{center}

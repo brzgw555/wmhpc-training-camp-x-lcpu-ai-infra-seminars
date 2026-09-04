@@ -8,17 +8,19 @@
 
 #define BLOCK 256
 
-__global__ void reverse_blocks(const float *in, float *out, int n) {
+__global__ void reverse_blocks(const float *in, float *out, int n)
+{
     __shared__ float buf[BLOCK];
     int base = blockIdx.x * BLOCK;
     int t = threadIdx.x;
 
     buf[t] = in[base + t];
-    __syncthreads();  // <-- 实验对象
+    __syncthreads(); // <-- 实验对象
     out[base + t] = buf[BLOCK - 1 - t];
 }
 
-int main() {
+int main()
+{
     const int nblocks = 4096;
     const int n = nblocks * BLOCK;
     size_t bytes = (size_t)n * sizeof(float);
