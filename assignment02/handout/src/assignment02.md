@@ -120,6 +120,8 @@ make run/m1_sm80/01_fragment_map
 A 的同一个 b32 寄存器中的 4 个 fp8 元素沿矩阵哪个方向相邻？
 这个布局对 1.4 中使用 ldmatrix load 有什么影响？
 
+沿k维度 直接load一个寄存器内的内容
+
 ### 1.2 {.prob type=DEBUG file=cuda/m1_sm80/02_bug_fragment.cu}
 
 这个程序发一条 m16n8k16 fp16 mma，判测会 FAIL。先运行一遍，后改动:

@@ -9,7 +9,8 @@
 #include <cuda_fp16.h>
 #include "../common.h"
 
-__global__ void mma_buggy(const __half* A, const __half* B, float* D) {
+__global__ void mma_buggy(const __half *A, const __half *B, float *D)
+{
     int lane = threadIdx.x;
     int group = lane >> 2;
     int tig = lane & 3;
@@ -17,25 +18,25 @@ __global__ void mma_buggy(const __half* A, const __half* B, float* D) {
     // A fragment:8 个 fp16 逐个装载。
     __half a0 = A[group * 16 + tig * 2];
     __half a1 = A[group * 16 + tig * 2 + 1];
-    __half a2 = A[group * 16 + tig * 2];
-    __half a3 = A[group * 16 + tig * 2 + 1];
+    __half a2 = A[group * 16 + tig * 2 + 128];
+    __half a3 = A[group * 16 + tig * 2 + 129];
     __half a4 = A[group * 16 + tig * 2 + 8];
     __half a5 = A[group * 16 + tig * 2 + 9];
-    __half a6 = A[group * 16 + tig * 2 + 8];
-    __half a7 = A[group * 16 + tig * 2 + 9];
+    __half a6 = A[group * 16 + tig * 2 + 8 + 128];
+    __half a7 = A[group * 16 + tig * 2 + 9 + 128];
     unsigned ra[4];
-    reinterpret_cast<__half2*>(ra)[0] = __halves2half2(a0, a1);
-    reinterpret_cast<__half2*>(ra)[1] = __halves2half2(a2, a3);
-    reinterpret_cast<__half2*>(ra)[2] = __halves2half2(a4, a5);
-    reinterpret_cast<__half2*>(ra)[3] = __halves2half2(a6, a7);
+    reinterpret_cast<__half2 *>(ra)[0] = __halves2half2(a0, a1);
+    reinterpret_cast<__half2 *>(ra)[1] = __halves2half2(a2, a3);
+    reinterpret_cast<__half2 *>(ra)[2] = __halves2half2(a4, a5);
+    reinterpret_cast<__half2 *>(ra)[3] = __halves2half2(a6, a7);
 
     __half b0 = B[(tig * 2) * 8 + group];
     __half b1 = B[(tig * 2 + 1) * 8 + group];
     __half b2 = B[(tig * 2 + 8) * 8 + group];
     __half b3 = B[(tig * 2 + 9) * 8 + group];
     unsigned rb[2];
-    reinterpret_cast<__half2*>(rb)[0] = __halves2half2(b0, b1);
-    reinterpret_cast<__half2*>(rb)[1] = __halves2half2(b2, b3);
+    reinterpret_cast<__half2 *>(rb)[0] = __halves2half2(b0, b1);
+    reinterpret_cast<__half2 *>(rb)[1] = __halves2half2(b2, b3);
 
     float c[4] = {0.f, 0.f, 0.f, 0.f}, d[4];
     asm volatile(
@@ -51,7 +52,8 @@ __global__ void mma_buggy(const __half* A, const __half* B, float* D) {
     D[(group + 8) * 8 + tig * 2 + 1] = d[3];
 }
 
-int main() {
+int main()
+{
     __half hA[16 * 16], hB[16 * 8];
     float ref[16 * 8] = {};
     // A 的上下半特意不同,别改这份数据。
@@ -68,7 +70,7 @@ int main() {
                                   __half2float(hB[k * 8 + n]);
 
     __half *dA, *dB;
-    float* dD;
+    float *dD;
     CUDA_CHECK(cudaMalloc(&dA, sizeof(hA)));
     CUDA_CHECK(cudaMalloc(&dB, sizeof(hB)));
     CUDA_CHECK(cudaMalloc(&dD, 16 * 8 * 4));
@@ -82,7 +84,8 @@ int main() {
     long bad = 0;
     for (int r = 0; r < 16; r++)
         for (int n = 0; n < 8; n++)
-            if (got[r * 8 + n] != ref[r * 8 + n]) {
+            if (got[r * 8 + n] != ref[r * 8 + n])
+            {
                 if (bad < 4)
                     printf("MISMATCH D[%d][%d]: got %.0f, want %.0f\n", r, n,
                            got[r * 8 + n], ref[r * 8 + n]);
