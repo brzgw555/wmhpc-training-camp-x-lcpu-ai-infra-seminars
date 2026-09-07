@@ -30,7 +30,7 @@ static int a_col_of(int lane, int i)
 static int b_row_of(int lane, int i)
 {
     int r = i / 4;
-    return (lane % 4) * 4 + i % 4 + 8 * r;
+    return (lane % 4) * 4 + i % 4 + 16 * r;
 } // k
 static int b_col_of(int lane, int i)
 {
