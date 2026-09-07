@@ -20,25 +20,22 @@
 static int a_row_of(int lane, int i)
 {
     int r = i / 4;
-    return lane / 4 + 8 * (r >> 1);
+    return (lane / 4) + 8 * (r >> 1);
 }
 static int a_col_of(int lane, int i)
 {
-    (void)lane;
-    (void)i;
-    return 0;
+    int r = i / 4;
+    return (lane % 4) * 4 + i % 4 + 16 * (r & 1);
 }
 static int b_row_of(int lane, int i)
 {
-    (void)lane;
-    (void)i;
-    return 0;
+    int r = i / 4;
+    return (lane / 4) + 8 * r;
 } // k
 static int b_col_of(int lane, int i)
 {
-    (void)lane;
-    (void)i;
-    return 0;
+    int r = i / 4;
+    return (lane % 4) * 4 + i % 4;
 } // n
 
 // 以下为判测,不需要修改。表项 = row * 32 + col(A)/ k * 8 + n(B)。
