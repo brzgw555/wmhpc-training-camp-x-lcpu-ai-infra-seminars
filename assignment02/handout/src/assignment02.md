@@ -130,6 +130,8 @@ A 的同一个 b32 寄存器中的 4 个 fp8 元素沿矩阵哪个方向相邻�
 
 (b) 修好它，并解释错的是哪个 fragment 的哪部分映射，为什么恰好产生(a)的症状。
 
+错的是A的fragment a[1] a[3] 的偏移
+
 ```
 cd assignment02/cuda
 make run/m1_sm80/02_bug_fragment

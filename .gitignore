@@ -9,6 +9,7 @@ CLAUDE.local.md
 .cursor/
 .aider*
 .windsurf/
+.vscode/
 
 # LaTeX build artifacts (the copy at assignment*/assignment*.pdf is committed;
 # the duplicate inside handout/ build dirs is not)
